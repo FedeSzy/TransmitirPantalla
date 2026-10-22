@@ -8,6 +8,8 @@
   const LARGO_CODIGO = 6;
   const BITRATE_MAX = 4_000_000;
   const URL_CONTROL = 'http://127.0.0.1:8765'; // ayudante local (control/servidor.js)
+  const ESPERA_CONEXION = 20000; // si no hay imagen en este tiempo, la red probablemente bloquea WebRTC
+  const CLAVE_TURN = 'transmitirpantalla-turn';
 
   const $ = (sel) => document.querySelector(sel);
   const params = new URLSearchParams(location.search);
@@ -21,7 +23,38 @@
 
   const normalizarCodigo = (texto) => texto.toUpperCase().replace(/[^A-Z0-9]/g, '');
   const idDesdeCodigo = (codigo) => PREFIJO_ID + codigo.toLowerCase();
-  const urlEnviar = (codigo) => `${location.origin}${location.pathname}?modo=enviar&codigo=${codigo}`;
+
+  /* Servidor TURN propio (opcional): se guarda en la PC y viaja al celular dentro del enlace del QR. */
+  const codificar = (obj) => btoa(JSON.stringify(obj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const decodificar = (texto) => JSON.parse(atob(texto.replace(/-/g, '+').replace(/_/g, '/')));
+
+  function leerTurnGuardado() {
+    try {
+      return JSON.parse(localStorage.getItem(CLAVE_TURN));
+    } catch {
+      return null;
+    }
+  }
+
+  function leerTurnDeUrl() {
+    try {
+      return params.get('turn') ? decodificar(params.get('turn')) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function opcionesPeer(turn) {
+    const iceServers = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
+    ];
+    if (turn?.urls?.length) iceServers.unshift(turn);
+    return { debug: 1, config: { iceServers } };
+  }
+
+  const urlEnviar = (codigo, turn) =>
+    `${location.origin}${location.pathname}?modo=enviar&codigo=${codigo}${turn ? `&turn=${codificar(turn)}` : ''}`;
 
   function mostrarEstado(el, texto, esError = false) {
     el.textContent = texto;
@@ -62,15 +95,18 @@
     let llamada = null;
     let codigo = '';
     let wakeLock = null;
+    let turn = leerTurnGuardado();
+    let temporizadorConexion = null;
+    const problemaRed = $('#problema-red-recibir');
     const control = crearControl(video, visor);
 
     function crearPeer() {
       codigo = generarCodigo();
-      peer = new Peer(idDesdeCodigo(codigo), { debug: 1 });
+      peer = new Peer(idDesdeCodigo(codigo), opcionesPeer(turn));
 
       peer.on('open', () => {
         $('#codigo').textContent = codigo;
-        dibujarQR(urlEnviar(codigo));
+        dibujarQR(urlEnviar(codigo, turn));
         mostrarEstado(estado, 'Listo. Esperando que el celular se conecte…');
       });
 
@@ -99,11 +135,20 @@
       if (llamada) llamada.close();
       llamada = nueva;
       nueva.answer(); // solo recibimos, no enviamos nada
-      mostrarEstado(estado, 'Conectando con el celular…');
+      problemaRed.hidden = true;
+      mostrarEstado(estado, 'El celular se encontró. Estableciendo la conexión…');
 
+      // El stream llega antes de que la conexión funcione: el visor se muestra recién con la primera imagen.
       nueva.on('stream', (stream) => {
         if (llamada !== nueva) return;
-        mostrarVisor(stream, nueva.metadata || {});
+        video.srcObject = stream;
+        video.muted = true;
+        video.play().catch(() => {});
+        video.addEventListener('loadeddata', () => {
+          if (llamada !== nueva) return;
+          clearTimeout(temporizadorConexion);
+          mostrarVisor(stream, nueva.metadata || {});
+        }, { once: true });
       });
       nueva.on('close', () => terminarLlamada(nueva));
       nueva.on('error', (err) => {
@@ -115,11 +160,14 @@
       pc?.addEventListener('connectionstatechange', () => {
         if (['failed', 'closed'].includes(pc.connectionState)) terminarLlamada(nueva);
       });
+
+      clearTimeout(temporizadorConexion);
+      temporizadorConexion = setTimeout(() => {
+        if (llamada === nueva && visor.hidden) terminarLlamada(nueva);
+      }, ESPERA_CONEXION);
     }
 
     async function mostrarVisor(stream, metadata) {
-      video.srcObject = stream;
-      video.muted = true;
       espera.hidden = true;
       visor.hidden = false;
       btnSonido.hidden = stream.getAudioTracks().length === 0;
@@ -127,7 +175,6 @@
       btnSonido.textContent = '🔈 Activar sonido';
       actualizarInfo(metadata);
       video.onresize = () => actualizarInfo(metadata);
-      video.play().catch(() => {});
       for (const pista of stream.getVideoTracks()) {
         pista.addEventListener('ended', () => terminarLlamada(llamada));
       }
@@ -142,7 +189,9 @@
 
     function terminarLlamada(cual) {
       if (!cual || cual !== llamada) return;
+      const llegoImagen = !visor.hidden;
       llamada = null;
+      clearTimeout(temporizadorConexion);
       cual.close();
       video.srcObject = null;
       visor.hidden = true;
@@ -151,7 +200,12 @@
       wakeLock = null;
       control.desactivar();
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-      mostrarEstado(estado, 'La transmisión terminó. Podés volver a conectarte con el mismo código.');
+      if (llegoImagen) {
+        mostrarEstado(estado, 'La transmisión terminó. Podés volver a conectarte con el mismo código.');
+      } else {
+        mostrarEstado(estado, 'No se pudo recibir el video del celular.', true);
+        problemaRed.hidden = false;
+      }
     }
 
     function dibujarQR(texto) {
@@ -167,10 +221,10 @@
     $('#btn-copiar').addEventListener('click', async (e) => {
       if (!codigo) return;
       try {
-        await navigator.clipboard.writeText(urlEnviar(codigo));
+        await navigator.clipboard.writeText(urlEnviar(codigo, turn));
         e.target.textContent = '¡Copiado!';
       } catch {
-        prompt('Copiá este enlace:', urlEnviar(codigo));
+        prompt('Copiá este enlace:', urlEnviar(codigo, turn));
       }
       setTimeout(() => (e.target.textContent = 'Copiar enlace'), 2000);
     });
@@ -201,6 +255,44 @@
     // Si la pestaña vuelve a estar visible, recuperar el wake lock
     document.addEventListener('visibilitychange', async () => {
       if (document.visibilityState === 'visible' && !visor.hidden && !wakeLock) wakeLock = await pedirWakeLock();
+    });
+
+    // Opciones avanzadas: servidor TURN
+    const formTurn = $('#form-turn');
+    const estadoTurn = $('#estado-turn');
+    if (turn) {
+      $('#turn-urls').value = turn.urls.join(', ');
+      $('#turn-usuario').value = turn.username || '';
+      $('#turn-clave').value = turn.credential || '';
+      mostrarEstado(estadoTurn, 'Usando el servidor TURN guardado.');
+    }
+
+    function aplicarTurn(nuevo) {
+      turn = nuevo;
+      try {
+        if (turn) localStorage.setItem(CLAVE_TURN, JSON.stringify(turn));
+        else localStorage.removeItem(CLAVE_TURN);
+      } catch { /* sin almacenamiento: vale solo para esta sesión */ }
+      // PeerJS lee esta configuración al crear cada conexión nueva
+      peer.options.config = opcionesPeer(turn).config;
+      if (codigo) dibujarQR(urlEnviar(codigo, turn));
+    }
+
+    formTurn.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const urls = $('#turn-urls').value.split(',').map((u) => u.trim()).filter(Boolean);
+      if (!urls.length || urls.some((u) => !/^turns?:/.test(u))) {
+        mostrarEstado(estadoTurn, 'Las direcciones tienen que empezar con turn: o turns:', true);
+        return;
+      }
+      aplicarTurn({ urls, username: $('#turn-usuario').value.trim(), credential: $('#turn-clave').value.trim() });
+      mostrarEstado(estadoTurn, 'Guardado. Escaneá el QR nuevo con el celular.');
+    });
+
+    $('#btn-borrar-turn').addEventListener('click', () => {
+      formTurn.reset();
+      aplicarTurn(null);
+      mostrarEstado(estadoTurn, 'Se borró el servidor TURN.');
     });
 
     window.addEventListener('beforeunload', () => peer?.destroy());
@@ -480,6 +572,7 @@
       }
       const fuente = new FormData(form).get('fuente');
       btnTransmitir.disabled = true;
+      $('#problema-red-enviar').hidden = true;
 
       // Pedir la captura primero: el navegador exige que sea consecuencia directa del toque.
       try {
@@ -501,7 +594,8 @@
       $('#transmitiendo').hidden = false;
       mostrarEstado(estado, 'Conectando…');
 
-      peer = new Peer({ debug: 1 });
+      let conectado = false;
+      peer = new Peer(opcionesPeer(leerTurnDeUrl()));
       peer.on('open', () => {
         llamada = peer.call(idDesdeCodigo(codigo), stream, {
           metadata: { fuente, dispositivo: nombreDispositivo() },
@@ -510,13 +604,20 @@
         llamada.peerConnection.addEventListener('connectionstatechange', () => {
           const s = llamada?.peerConnection.connectionState;
           if (s === 'connected') {
+            conectado = true;
             clearTimeout(timeoutConexion);
             mostrarEstado(estado, '🔴 Transmitiendo a la PC.');
           } else if (s === 'failed') {
-            detener('Se perdió la conexión con la PC.', true);
+            if (conectado) detener('Se perdió la conexión con la PC.', true);
+            else detener('No se pudo conectar con la PC.', true, true);
+          } else if (s === 'connecting') {
+            mostrarEstado(estado, 'La PC respondió. Estableciendo la conexión…');
           }
         });
-        llamada.on('close', () => detener('La PC cortó la transmisión.'));
+        llamada.on('close', () => {
+          if (conectado) detener('La PC cortó la transmisión.');
+          else detener('No se pudo conectar con la PC.', true, true);
+        });
         llamada.on('error', (err) => detener(`Error: ${describirError(err)}`, true));
       });
       peer.on('error', (err) => {
@@ -527,15 +628,14 @@
         }
       });
 
-      timeoutConexion = setTimeout(() => {
-        detener('No se pudo conectar. Probá que ambos dispositivos tengan internet, o usá la misma red Wi-Fi.', true);
-      }, 30000);
+      timeoutConexion = setTimeout(() => detener('No se pudo conectar con la PC.', true, true), ESPERA_CONEXION);
 
       wakeLock = await pedirWakeLock();
     });
 
-    function detener(mensaje = 'Transmisión detenida.', esError = false) {
+    function detener(mensaje = 'Transmisión detenida.', esError = false, problemaRed = false) {
       if (!stream && !peer) return;
+      $('#problema-red-enviar').hidden = !problemaRed;
       clearTimeout(timeoutConexion);
       const l = llamada;
       llamada = null;

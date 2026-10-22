@@ -42,6 +42,17 @@ Otras variables: `PUERTO`, `ADB` (ruta a adb) y `ADB_SERIAL` (si hay varios celu
 
 En iPhone no es posible controlar el teléfono desde la PC.
 
+## Redes de colegios o empresas
+
+Muchas de esas redes no dejan que dos dispositivos se conecten entre sí, y la transmisión no arranca.
+La web lo detecta a los 20 segundos y muestra qué hacer:
+
+1. **Lo más fácil:** activá la *Zona Wi-Fi / Hotspot* del celular y conectá la PC a esa red.
+   El video viaja por esa red local, así que casi no gasta datos.
+2. **Servidor TURN:** en la PC, *Opciones avanzadas*, cargá un servidor TURN que use el puerto 443
+   (hay planes gratis en [Metered](https://www.metered.ca/stun-turn) o [ExpressTURN](https://www.expressturn.com/)).
+   Se guarda en la PC y viaja al celular dentro del QR.
+
 ## Compatibilidad
 
 | Dispositivo | Pantalla | Cámara |

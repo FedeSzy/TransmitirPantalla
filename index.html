@@ -44,6 +44,37 @@
         </div>
       </div>
       <p id="estado-recibir" class="estado">Conectando con el servidor de señalización…</p>
+
+      <div id="problema-red-recibir" class="aviso problema-red" hidden>
+        <strong>La red no deja que el celular y la PC se conecten.</strong>
+        Pasa en redes de colegios y empresas, que bloquean la conexión directa entre dispositivos. Soluciones:
+        <ol>
+          <li><strong>La más fácil:</strong> activá la <em>Zona Wi-Fi / Hotspot</em> del celular y conectá la PC a esa red.
+            Después recargá esta página y volvé a conectar. El video viaja por esa red local, así que casi no gasta datos.</li>
+          <li>Configurá un servidor TURN que use el puerto 443 (en la PC: <em>Opciones avanzadas</em>) y escaneá el QR de nuevo.</li>
+        </ol>
+      </div>
+
+      <details id="avanzado" class="ayuda">
+        <summary>Opciones avanzadas: servidor TURN (para redes bloqueadas)</summary>
+        <p>Un servidor TURN reenvía el video cuando la red no permite la conexión directa.
+          Podés crear uno gratis en servicios como <a href="https://www.metered.ca/stun-turn" target="_blank" rel="noopener">Metered</a>
+          o <a href="https://www.expressturn.com/" target="_blank" rel="noopener">ExpressTURN</a>.
+          En redes escolares conviene usar las direcciones con puerto 443 (por ejemplo <code>turns:servidor:443?transport=tcp</code>).
+          Se guarda en esta PC y viaja al celular dentro del QR.</p>
+        <form id="form-turn" class="form-turn" autocomplete="off">
+          <label>Direcciones (separadas por coma)
+            <input id="turn-urls" type="text" placeholder="turn:servidor:443?transport=tcp, turns:servidor:443?transport=tcp" spellcheck="false">
+          </label>
+          <label>Usuario <input id="turn-usuario" type="text" spellcheck="false"></label>
+          <label>Clave <input id="turn-clave" type="text" spellcheck="false"></label>
+          <div class="botones-turn">
+            <button class="btn" type="submit">Guardar</button>
+            <button id="btn-borrar-turn" class="btn secundario" type="button">Borrar</button>
+            <span id="estado-turn" class="estado"></span>
+          </div>
+        </form>
+      </details>
     </section>
 
     <section id="visor" class="visor" hidden>
@@ -116,6 +147,16 @@
       </div>
 
       <p id="estado-enviar" class="estado"></p>
+
+      <div id="problema-red-enviar" class="aviso problema-red" hidden>
+        <strong>La red no deja que el celular y la PC se conecten.</strong>
+        Pasa en redes de colegios y empresas, que bloquean la conexión directa entre dispositivos. Soluciones:
+        <ol>
+          <li><strong>La más fácil:</strong> activá la <em>Zona Wi-Fi / Hotspot</em> del celular y conectá la PC a esa red.
+            Después recargá esta página y volvé a conectar. El video viaja por esa red local, así que casi no gasta datos.</li>
+          <li>Configurá un servidor TURN que use el puerto 443 (en la PC: <em>Opciones avanzadas</em>) y volvé a escanear el QR de la PC.</li>
+        </ol>
+      </div>
 
       <details class="ayuda">
         <summary>¿No funciona compartir pantalla en mi celular?</summary>
