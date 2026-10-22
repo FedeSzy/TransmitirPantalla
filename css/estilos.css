@@ -1,0 +1,193 @@
+:root {
+  --fondo: #0f172a;
+  --superficie: #1e293b;
+  --borde: #334155;
+  --texto: #e2e8f0;
+  --texto-suave: #94a3b8;
+  --acento: #38bdf8;
+  --acento-oscuro: #0284c7;
+  --peligro: #ef4444;
+  --radio: 14px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; height: 100%; }
+
+body {
+  background: var(--fondo);
+  color: var(--texto);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+a { color: var(--acento); }
+
+.vista {
+  flex: 1;
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.cabecera { text-align: center; margin: 16px 0 32px; }
+.cabecera h1 { margin: 0; font-size: clamp(1.8rem, 5vw, 2.6rem); }
+.sub { color: var(--texto-suave); margin: 8px 0 0; }
+
+.opciones {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.tarjeta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 24px;
+  border-radius: var(--radio);
+  background: var(--superficie);
+  border: 2px solid var(--borde);
+  color: var(--texto);
+  text-decoration: none;
+  transition: border-color .15s, transform .15s;
+}
+.tarjeta:hover, .tarjeta:focus-visible { border-color: var(--acento); transform: translateY(-2px); }
+.tarjeta.sugerida { border-color: var(--acento); }
+.tarjeta .icono { font-size: 2.4rem; }
+.tarjeta strong { font-size: 1.15rem; }
+.tarjeta span:last-child { color: var(--texto-suave); }
+
+.nota { color: var(--texto-suave); font-size: .9rem; text-align: center; margin-top: 32px; }
+
+.panel {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 24px;
+}
+.panel h2 { margin-top: 0; }
+
+.codigo-qr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px;
+  margin: 20px 0;
+}
+
+.qr {
+  background: #fff;
+  padding: 12px;
+  border-radius: 10px;
+  line-height: 0;
+  min-width: 200px;
+  min-height: 200px;
+}
+.qr img, .qr svg { width: 200px; height: 200px; image-rendering: pixelated; }
+
+.codigo {
+  font: 700 clamp(2.4rem, 8vw, 3.6rem)/1 ui-monospace, "SF Mono", Consolas, monospace;
+  letter-spacing: .15em;
+  margin-bottom: 16px;
+}
+
+.estado { color: var(--texto-suave); min-height: 1.5em; }
+.estado.error { color: #fca5a5; }
+
+.btn {
+  font: inherit;
+  font-weight: 600;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 16px;
+  background: var(--acento-oscuro);
+  color: #fff;
+  cursor: pointer;
+}
+.btn:hover { filter: brightness(1.1); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.secundario { background: var(--borde); }
+.btn.peligro { background: var(--peligro); }
+.btn.grande { width: 100%; padding: 16px; font-size: 1.1rem; margin-top: 16px; }
+
+label { display: block; margin-bottom: 6px; }
+
+.input-codigo {
+  width: 100%;
+  font: 700 2rem/1 ui-monospace, Consolas, monospace;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 12px;
+  border-radius: 10px;
+  border: 2px solid var(--borde);
+  background: var(--fondo);
+  color: var(--texto);
+}
+.input-codigo:focus { outline: none; border-color: var(--acento); }
+
+.fuentes {
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  margin: 20px 0 0;
+  padding: 8px 16px 12px;
+}
+.fuentes label { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
+.fuentes input:disabled + * , .fuentes label:has(input:disabled) { opacity: .5; }
+
+.aviso {
+  background: #422006;
+  border: 1px solid #a16207;
+  color: #fde68a;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: .95rem;
+}
+
+.vista-previa {
+  width: 100%;
+  max-height: 50vh;
+  background: #000;
+  border-radius: 10px;
+  margin-top: 16px;
+}
+
+.ayuda { margin-top: 24px; color: var(--texto-suave); }
+.ayuda summary { cursor: pointer; color: var(--texto); }
+
+/* Visor a pantalla completa en la PC */
+.visor {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+.visor video {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  object-fit: contain;
+  background: #000;
+}
+.barra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(15, 23, 42, .9);
+  transition: opacity .3s;
+}
+.barra .info { flex: 1; color: var(--texto-suave); font-size: .9rem; }
+.visor.inactivo .barra { opacity: 0; }
+.visor.inactivo { cursor: none; }
+
+.pie { text-align: center; padding: 16px; font-size: .9rem; }
+
+[hidden] { display: none !important; }
