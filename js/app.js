@@ -7,6 +7,7 @@
   const ALFABETO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin 0/O ni 1/I para evitar confusiones
   const LARGO_CODIGO = 6;
   const BITRATE_MAX = 4_000_000;
+  const URL_CONTROL = 'http://127.0.0.1:8765'; // ayudante local (control/servidor.js)
 
   const $ = (sel) => document.querySelector(sel);
   const params = new URLSearchParams(location.search);
@@ -61,6 +62,7 @@
     let llamada = null;
     let codigo = '';
     let wakeLock = null;
+    const control = crearControl(video, visor);
 
     function crearPeer() {
       codigo = generarCodigo();
@@ -121,6 +123,7 @@
       espera.hidden = true;
       visor.hidden = false;
       btnSonido.hidden = stream.getAudioTracks().length === 0;
+      $('#btn-control').hidden = metadata.fuente !== 'pantalla';
       btnSonido.textContent = '🔈 Activar sonido';
       actualizarInfo(metadata);
       video.onresize = () => actualizarInfo(metadata);
@@ -146,6 +149,7 @@
       espera.hidden = false;
       wakeLock?.release().catch(() => {});
       wakeLock = null;
+      control.desactivar();
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
       mostrarEstado(estado, 'La transmisión terminó. Podés volver a conectarte con el mismo código.');
     }
@@ -188,11 +192,11 @@
     const despertarBarra = () => {
       visor.classList.remove('inactivo');
       clearTimeout(temporizador);
-      temporizador = setTimeout(() => visor.classList.add('inactivo'), 3000);
+      temporizador = setTimeout(() => !control.activo() && visor.classList.add('inactivo'), 3000);
     };
     visor.addEventListener('mousemove', despertarBarra);
     visor.addEventListener('click', despertarBarra);
-    video.addEventListener('dblclick', () => $('#btn-pantalla-completa').click());
+    video.addEventListener('dblclick', () => !control.activo() && $('#btn-pantalla-completa').click());
 
     // Si la pestaña vuelve a estar visible, recuperar el wake lock
     document.addEventListener('visibilitychange', async () => {
@@ -201,6 +205,195 @@
 
     window.addEventListener('beforeunload', () => peer?.destroy());
     crearPeer();
+  }
+
+  /* ---------- PC: controlar el celular (Android + ADB) ---------- */
+
+  function crearControl(video, visor) {
+    const panel = $('#panel-control');
+    const ayuda = $('#ayuda-control');
+    const botonera = $('#botonera');
+    const estado = $('#estado-control');
+    const btnControl = $('#btn-control');
+    let activo = false;
+    let cola = Promise.resolve();
+    let inicio = null;
+    let ultimaRueda = 0;
+    let textoPendiente = '';
+    let temporizadorTexto = null;
+
+    async function pedir(accion, datos) {
+      const opciones = datos
+        ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) }
+        : {};
+      const respuesta = await fetch(`${URL_CONTROL}/${accion}`, opciones);
+      const json = await respuesta.json();
+      if (!json.ok) throw new Error(json.error);
+      return json;
+    }
+
+    // Los comandos se mandan en orden, uno detrás de otro
+    function enviar(accion, datos) {
+      cola = cola.then(() => pedir(accion, datos)).catch((err) => {
+        $('#info-control').textContent = `⚠️ ${err instanceof TypeError ? 'Se perdió el ayudante (servidor.js).' : err.message}`;
+      });
+    }
+
+    async function comprobar() {
+      mostrarEstado(estado, 'Buscando el ayudante en esta PC…');
+      try {
+        const info = await pedir('estado');
+        if (!info.conectado) {
+          throw new Error('El ayudante está abierto pero no hay ningún celular conectado por USB (o falta aceptar la depuración).');
+        }
+        ayuda.hidden = true;
+        botonera.hidden = false;
+        $('#info-control').textContent =
+          `Controlando ${info.modelo}: clic = tocar · mantener = tocar largo · arrastrar = deslizar · rueda = desplazar · clic derecho = atrás · teclado = escribir`;
+        activo = true;
+        visor.classList.add('controlando');
+        visor.classList.remove('inactivo');
+        video.focus();
+      } catch (err) {
+        activo = false;
+        visor.classList.remove('controlando');
+        ayuda.hidden = false;
+        botonera.hidden = true;
+        mostrarEstado(estado, err instanceof TypeError
+          ? 'No se encontró el ayudante. ¿Está corriendo "node servidor.js" en esta PC?'
+          : err.message, true);
+      }
+    }
+
+    function desactivar() {
+      activo = false;
+      panel.hidden = true;
+      visor.classList.remove('controlando');
+      btnControl.setAttribute('aria-pressed', 'false');
+    }
+
+    /* Posición del puntero dentro de la imagen (0..1), descontando las franjas negras de object-fit: contain */
+    function posicion(ev, limitar = false) {
+      const ancho = video.videoWidth;
+      const alto = video.videoHeight;
+      if (!ancho) return null;
+      const r = video.getBoundingClientRect();
+      const escala = Math.min(r.width / ancho, r.height / alto);
+      const w = ancho * escala;
+      const h = alto * escala;
+      let x = (ev.clientX - r.left - (r.width - w) / 2) / w;
+      let y = (ev.clientY - r.top - (r.height - h) / 2) / h;
+      if (limitar) {
+        x = Math.min(1, Math.max(0, x));
+        y = Math.min(1, Math.max(0, y));
+      } else if (x < 0 || x > 1 || y < 0 || y > 1) {
+        return null;
+      }
+      return { x, y, horizontal: ancho > alto };
+    }
+
+    function marcarToque(ev) {
+      const contenedor = video.parentElement;
+      const r = contenedor.getBoundingClientRect();
+      const marca = document.createElement('div');
+      marca.className = 'toque';
+      marca.style.left = `${ev.clientX - r.left}px`;
+      marca.style.top = `${ev.clientY - r.top}px`;
+      contenedor.append(marca);
+      marca.addEventListener('animationend', () => marca.remove());
+    }
+
+    video.addEventListener('pointerdown', (ev) => {
+      if (!activo || ev.button !== 0) return;
+      const p = posicion(ev);
+      if (!p) return;
+      ev.preventDefault();
+      video.focus();
+      video.setPointerCapture(ev.pointerId);
+      inicio = { ...p, t: performance.now(), cx: ev.clientX, cy: ev.clientY };
+    });
+
+    video.addEventListener('pointerup', (ev) => {
+      if (!activo || !inicio || ev.button !== 0) return;
+      const a = inicio;
+      inicio = null;
+      const b = posicion(ev, true);
+      const duracion = performance.now() - a.t;
+      marcarToque(ev);
+      if (Math.hypot(ev.clientX - a.cx, ev.clientY - a.cy) < 8) {
+        if (duracion > 500) enviar('deslizar', { x1: a.x, y1: a.y, x2: a.x, y2: a.y, ms: duracion, horizontal: a.horizontal });
+        else enviar('toque', a);
+      } else {
+        enviar('deslizar', { x1: a.x, y1: a.y, x2: b.x, y2: b.y, ms: Math.min(duracion, 1500), horizontal: a.horizontal });
+      }
+    });
+
+    video.addEventListener('pointercancel', () => (inicio = null));
+
+    video.addEventListener('contextmenu', (ev) => {
+      if (!activo) return;
+      ev.preventDefault();
+      enviar('tecla', { tecla: 'ATRAS' });
+    });
+
+    video.addEventListener('wheel', (ev) => {
+      if (!activo) return;
+      ev.preventDefault();
+      const ahora = performance.now();
+      const p = posicion(ev);
+      if (!p || ahora - ultimaRueda < 300 || ev.deltaY === 0) return;
+      ultimaRueda = ahora;
+      const distancia = Math.sign(ev.deltaY) * 0.3;
+      const y1 = Math.min(0.9, Math.max(0.1, p.y));
+      const y2 = Math.min(0.95, Math.max(0.05, y1 - distancia));
+      enviar('deslizar', { x1: p.x, y1, x2: p.x, y2, ms: 200, horizontal: p.horizontal });
+    }, { passive: false });
+
+    const TECLAS_ESPECIALES = {
+      Backspace: 'BORRAR', Enter: 'ENTER', Tab: 'TAB',
+      ArrowLeft: 'IZQUIERDA', ArrowRight: 'DERECHA', ArrowUp: 'ARRIBA', ArrowDown: 'ABAJO',
+    };
+
+    function vaciarTexto() {
+      clearTimeout(temporizadorTexto);
+      if (textoPendiente) enviar('texto', { texto: textoPendiente });
+      textoPendiente = '';
+    }
+
+    video.addEventListener('keydown', (ev) => {
+      if (!activo || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      if (TECLAS_ESPECIALES[ev.key]) {
+        ev.preventDefault();
+        vaciarTexto();
+        enviar('tecla', { tecla: TECLAS_ESPECIALES[ev.key] });
+      } else if (ev.key.length === 1) {
+        ev.preventDefault();
+        textoPendiente += ev.key;
+        clearTimeout(temporizadorTexto);
+        temporizadorTexto = setTimeout(vaciarTexto, 150);
+      }
+    });
+
+    for (const boton of document.querySelectorAll('[data-tecla]')) {
+      boton.addEventListener('click', () => {
+        enviar('tecla', { tecla: boton.dataset.tecla });
+        video.focus();
+      });
+    }
+
+    btnControl.addEventListener('click', () => {
+      if (!panel.hidden) {
+        desactivar();
+        return;
+      }
+      panel.hidden = false;
+      btnControl.setAttribute('aria-pressed', 'true');
+      comprobar();
+    });
+
+    $('#btn-reintentar-control').addEventListener('click', comprobar);
+
+    return { desactivar, activo: () => activo };
   }
 
   /* ---------- Celular: enviar ---------- */

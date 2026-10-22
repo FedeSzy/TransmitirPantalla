@@ -47,9 +47,39 @@
     </section>
 
     <section id="visor" class="visor" hidden>
-      <video id="video" autoplay playsinline muted></video>
+      <div id="contenedor-video" class="contenedor-video">
+        <video id="video" autoplay playsinline muted tabindex="0"></video>
+      </div>
+
+      <div id="panel-control" class="panel-control" hidden>
+        <div id="ayuda-control" class="ayuda-control" hidden>
+          <strong>Para controlar el celular (solo Android):</strong>
+          <ol>
+            <li>En el celular activá <em>Opciones de desarrollador → Depuración USB</em>
+              (se habilitan tocando 7 veces <em>Número de compilación</em> en <em>Acerca del teléfono</em>).</li>
+            <li>Instalá en la PC <a href="https://developer.android.com/tools/releases/platform-tools" target="_blank" rel="noopener">Android Platform Tools (ADB)</a>
+              y <a href="https://nodejs.org/" target="_blank" rel="noopener">Node.js</a>.</li>
+            <li>Conectá el celular por USB y aceptá el aviso de depuración.</li>
+            <li>Descargá <a href="control/servidor.js" download="servidor.js">servidor.js</a> y ejecutá <code>node servidor.js</code>.
+              Dejá esa ventana abierta.</li>
+          </ol>
+          <button id="btn-reintentar-control" class="btn" type="button">Reintentar</button>
+          <span id="estado-control" class="estado"></span>
+        </div>
+        <div id="botonera" class="botonera" hidden>
+          <span id="info-control" class="info"></span>
+          <button class="btn secundario" type="button" data-tecla="VOL_MENOS" title="Bajar volumen">🔉</button>
+          <button class="btn secundario" type="button" data-tecla="VOL_MAS" title="Subir volumen">🔊</button>
+          <button class="btn secundario" type="button" data-tecla="ENCENDIDO" title="Bloquear / encender">⏻</button>
+          <button class="btn secundario" type="button" data-tecla="ATRAS" title="Atrás (Esc)">◁ Atrás</button>
+          <button class="btn secundario" type="button" data-tecla="INICIO" title="Inicio">○ Inicio</button>
+          <button class="btn secundario" type="button" data-tecla="RECIENTES" title="Recientes">▢ Recientes</button>
+        </div>
+      </div>
+
       <div class="barra">
         <span id="info-visor" class="info"></span>
+        <button id="btn-control" class="btn secundario" type="button" aria-pressed="false">🖱️ Controlar</button>
         <button id="btn-sonido" class="btn secundario" type="button" hidden>🔈 Activar sonido</button>
         <button id="btn-pantalla-completa" class="btn" type="button">⛶ Pantalla completa</button>
         <button id="btn-cortar" class="btn peligro" type="button">Cortar</button>

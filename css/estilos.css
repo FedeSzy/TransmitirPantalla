@@ -168,13 +168,46 @@ label { display: block; margin-bottom: 6px; }
   flex-direction: column;
   z-index: 10;
 }
-.visor video {
+.contenedor-video {
   flex: 1;
   min-height: 0;
+  position: relative;
+}
+.visor video {
+  position: absolute;
+  inset: 0;
   width: 100%;
+  height: 100%;
   object-fit: contain;
   background: #000;
+  outline: none;
 }
+.visor.controlando video { cursor: pointer; touch-action: none; }
+.visor.controlando video:focus-visible { box-shadow: inset 0 0 0 2px var(--acento); }
+
+.toque {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border-radius: 50%;
+  border: 2px solid var(--acento);
+  pointer-events: none;
+  animation: toque .4s ease-out forwards;
+}
+@keyframes toque { to { transform: scale(1.8); opacity: 0; } }
+
+.panel-control {
+  background: var(--superficie);
+  border-top: 1px solid var(--borde);
+  padding: 8px 12px;
+}
+.botonera { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.botonera .info { flex: 1; color: var(--texto-suave); font-size: .9rem; }
+.ayuda-control { font-size: .95rem; max-height: 40vh; overflow: auto; }
+.ayuda-control ol { margin: 8px 0; padding-left: 20px; }
+.ayuda-control code { background: var(--fondo); padding: 1px 6px; border-radius: 4px; }
+.btn[aria-pressed="true"] { background: var(--acento-oscuro); }
 .barra {
   display: flex;
   flex-wrap: wrap;
